@@ -1,14 +1,9 @@
-#![cfg_attr(feature = "real_blackbox", feature(test))]
-
-#[cfg(feature = "real_blackbox")]
-extern crate test;
-
 use cfg_if::cfg_if;
 use std::{
     collections::HashMap,
     env::args,
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -20,25 +15,8 @@ mod macros;
 
 /// A function that is opaque to the optimizer, used to prevent the compiler from
 /// optimizing away computations in a benchmark.
-///
-/// This variant is backed by the (unstable) test::black_box function.
-#[cfg(feature = "real_blackbox")]
 pub fn black_box<T>(dummy: T) -> T {
-    test::black_box(dummy)
-}
-
-/// A function that is opaque to the optimizer, used to prevent the compiler from
-/// optimizing away computations in a benchmark.
-///
-/// This variant is stable-compatible, but it may cause some performance overhead
-/// or fail to prevent code from being eliminated.
-#[cfg(not(feature = "real_blackbox"))]
-pub fn black_box<T>(dummy: T) -> T {
-    unsafe {
-        let ret = std::ptr::read_volatile(&dummy);
-        std::mem::forget(dummy);
-        ret
-    }
+    std::hint::black_box(dummy)
 }
 
 fn check_valgrind() -> bool {
@@ -146,8 +124,7 @@ fn run_bench(
         .output()
         .expect("Failed to run benchmark in cachegrind");
     if !output.status.success() {
-        use std::io::Write;
-        std::io::stderr().write_all(&output.stderr);
+        std::io::stderr().write_all(&output.stderr).unwrap();
         panic!(
             "Failed to run benchmark in cachegrind. Exit code: {}",
             output.status
