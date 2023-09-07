@@ -56,6 +56,47 @@ fn get_arch() -> String {
         .to_owned()
 }
 
+/// cpu clock rate in Hz
+fn clock() -> Option<u64> {
+    let f = BufReader::new(File::open("/proc/cpuinfo").ok()?);
+    for line in f.lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        let Some((key, value)) = line.split_once(":") else {
+            continue;
+        };
+        let (key, value) = (key.trim(), value.trim());
+        if key == "model name" {
+            let (_, clock) = value.split_once('@')?;
+            let clock = clock.trim();
+            macro_rules! freq {
+                ($name:literal, $power:literal) => {
+                    if let Some(clock) = clock.strip_suffix($name) {
+                        return Some(
+                            (clock.parse::<f64>().ok()? * 10f64.powf($power as f64)) as u64,
+                        );
+                    }
+                };
+            }
+            freq!("QHz", 30);
+            freq!("RHz", 27);
+            freq!("YHz", 24);
+            freq!("ZHz", 21);
+            freq!("EHz", 18);
+            freq!("PHz", 15);
+            freq!("THz", 12);
+            freq!("GHz", 9);
+            freq!("MHz", 6);
+            freq!("kHz", 3);
+            freq!("hHz", 2);
+            freq!("daHz", 1);
+            freq!("Hz", 0);
+        }
+    }
+    None
+}
+
 fn basic_valgrind() -> Command {
     Command::new("valgrind")
 }
@@ -361,10 +402,16 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
             }
         );
         println!(
-            "  Estimated Cycles: {:>15}{}",
+            "  Estimated Cycles: {:>15}{}{}",
             summary.cycles(),
             match &old_summary {
                 Some(old) => percentage_diff(summary.cycles(), old.cycles()),
+                None => "".to_owned(),
+            },
+            match clock() {
+                Some(c) => {
+                    format!(" ({:.3}μs)", (10000.0 / c as f64) * summary.cycles() as f64)
+                }
                 None => "".to_owned(),
             }
         );
