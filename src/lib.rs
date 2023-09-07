@@ -138,12 +138,13 @@ fn run_bench(
         .arg("--I1=32768,8,64")
         .arg("--D1=32768,8,64")
         .arg("--LL=8388608,16,64")
+        .arg("--cache-sim=yes")
         .arg(format!("--cachegrind-out-file={}", output_file.display()))
         .arg(executable)
         .arg("--iai-run")
         .arg(i.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        //.stdout(Stdio::null())
+        //.stderr(Stdio::null())
         .status()
         .expect("Failed to run benchmark in cachegrind");
 
