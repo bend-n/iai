@@ -364,6 +364,10 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
             let diff = (new - old) / old;
             let pct = diff * 100.0;
 
+            if pct < 0.0001 {
+                return " (No change)".to_owned();
+            }
+
             format!(" ({:>+6}%)", signed_short(pct))
         }
 
