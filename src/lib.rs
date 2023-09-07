@@ -130,7 +130,7 @@ fn run_bench(
     } else {
         valgrind_without_aslr(arch)
     };
-    let status = cmd
+    let output = cmd
         .arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
         // since otherwise cachegrind would take them from the CPU and make benchmark runs
@@ -143,15 +143,14 @@ fn run_bench(
         .arg(executable)
         .arg("--iai-run")
         .arg(i.to_string())
-        //.stdout(Stdio::null())
-        //.stderr(Stdio::null())
-        .status()
+        .output()
         .expect("Failed to run benchmark in cachegrind");
-
-    if !status.success() {
+    if !output.status.success() {
+        use std::io::Write;
+        std::io::stderr().write_all(&output.stderr);
         panic!(
             "Failed to run benchmark in cachegrind. Exit code: {}",
-            status
+            output.status
         );
     }
 
