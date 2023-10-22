@@ -63,7 +63,7 @@ fn clock() -> Option<u64> {
         let Ok(line) = line else {
             continue;
         };
-        let Some((key, value)) = line.split_once(":") else {
+        let Some((key, value)) = line.split_once(':') else {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
@@ -236,6 +236,35 @@ struct CachegrindStats {
     data_l1_write_misses: u64,
     data_cache_write_misses: u64,
 }
+
+impl std::fmt::Display for CachegrindStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            instruction_reads,
+            instruction_l1_misses,
+            instruction_cache_misses,
+            data_reads,
+            data_l1_read_misses,
+            data_cache_read_misses,
+            data_writes,
+            data_l1_write_misses,
+            data_cache_write_misses,
+        } = self;
+        let cycles = self.summarize().cycles();
+        write!(
+            f,
+            r#"{{"instruction_reads":{instruction_reads},"instruction_l1_misses":{instruction_l1_misses},"instruction_cache_misses":{instruction_cache_misses},"data_reads":{data_reads},"data_l1_read_misses":{data_l1_read_misses},"data_cache_read_misses":{data_cache_read_misses},"data_writes":{data_writes},"data_l1_write_misses":{data_l1_write_misses},"data_cache_write_misses":{data_cache_write_misses},"cycles":{cycles}"#
+        )?;
+        match clock() {
+            Some(c) => {
+                let time = (10000.0 / c as f64) * cycles as f64;
+                write!(f, r#","time_passed":"{time:.3}μs"}}"#)
+            }
+            None => write!(f, "}}"),
+        }
+    }
+}
+
 impl CachegrindStats {
     pub fn ram_accesses(&self) -> u64 {
         self.instruction_cache_misses + self.data_cache_read_misses + self.data_cache_write_misses
@@ -290,8 +319,8 @@ impl CachegrindSummary {
 pub fn runner(benches: &[&(&'static str, fn())]) {
     let mut args_iter = args();
     let executable = args_iter.next().unwrap();
-
-    if let Some("--iai-run") = args_iter.next().as_deref() {
+    let arg = args_iter.next();
+    if let Some("--iai-run") = arg.as_deref() {
         // In this branch, we're running under cachegrind, so execute the benchmark as quickly as
         // possible and exit
         let index: isize = args_iter.next().unwrap().parse().unwrap();
@@ -307,6 +336,7 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
         (benches[index].1)();
         return;
     }
+    let json = arg.map_or(false, |a| a == "--json");
 
     // Otherwise we're running normally, under cargo
     if !check_valgrind() {
@@ -321,7 +351,11 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
         run_bench(&arch, &executable, -1, "iai_calibration", allow_aslr);
 
     for (i, (name, _func)) in benches.iter().enumerate() {
-        println!("{}", name);
+        if json {
+            println!(r#"{{"event":"run","benchmark":"{name}"}}"#);
+        } else {
+            println!("{}", name);
+        }
         let (stats, old_stats) = run_bench(&arch, &executable, i as isize, name, allow_aslr);
         let (stats, old_stats) = (
             stats.subtract(&calibration),
@@ -332,6 +366,16 @@ pub fn runner(benches: &[&(&'static str, fn())]) {
                 _ => None,
             },
         );
+        if json {
+            if let Some(old) = old_stats {
+                println!(
+                    r#"{{"event":"ran","benchmark":"{name}","stats":{stats},"old_stats":{old}}}"#
+                );
+            } else {
+                println!(r#"{{"event":"ran","benchmark":"{name}","stats":{stats}}}"#);
+            }
+            continue;
+        }
 
         fn signed_short(n: f64) -> String {
             let n_abs = n.abs();
