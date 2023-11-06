@@ -149,6 +149,9 @@ fn run_bench(
     } else {
         valgrind_without_aslr(arch)
     };
+    if let Ok(v) = std::env::var("CACHEGRIND_FLAGS") {
+        cmd.args(v.split(" "));
+    }
     let output = cmd
         .arg("--tool=cachegrind")
         // Set some reasonable cache sizes. The exact sizes matter less than having fixed sizes,
